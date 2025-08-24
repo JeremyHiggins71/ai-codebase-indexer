@@ -158,6 +158,26 @@ python codebase_indexer.py ./prototype \
   --summary
 ```
 
+### C/C++ Examples
+```bash
+# Game engine analysis (automatically skips vendor libraries)
+python codebase_indexer.py ./game-engine --summary
+
+# Embedded C project
+python codebase_indexer.py ./firmware \
+  --ignore "vendor/" \
+  --max-file-size 100 \
+  --summary
+
+# Full-stack with C++ backend and database
+python codebase_indexer.py ./my-app \
+  --db-type postgresql \
+  --db-user myuser \
+  --db-name myapp_db \
+  --ignore-library "my-custom-framework" \
+  --summary
+```
+
 ### Development Workflow
 ```bash
 # First run: Full analysis

@@ -184,6 +184,72 @@ jobs:
         }
         EOF
 
+    - name: Create sample C/C++ project structure
+      run: |
+        mkdir -p test-projects/cpp-game/src test-projects/cpp-game/include
+        cat > test-projects/cpp-game/src/renderer.cpp << 'EOF'
+        #include <GL/gl.h>
+        #include "../include/renderer.h"
+        
+        namespace engine {
+            class Renderer : public RenderDevice {
+            public:
+                bool init(int width, int height) {
+                    // Initialize renderer
+                    return true;
+                }
+                
+                void render(const Scene& scene) {
+                    // Render scene
+                }
+                
+                void cleanup() {
+                    // Cleanup resources
+                }
+            };
+        }
+        EOF
+        
+        cat > test-projects/cpp-game/include/renderer.h << 'EOF'
+        #ifndef RENDERER_H
+        #define RENDERER_H
+        
+        namespace engine {
+            class RenderDevice {
+            public:
+                virtual ~RenderDevice() = default;
+            };
+            
+            struct Scene {
+                int object_count;
+                float* vertices;
+            };
+        }
+        
+        #endif
+        EOF
+        
+        cat > test-projects/cpp-game/src/physics.c << 'EOF'
+        #include <math.h>
+        #include <stdio.h>
+        
+        typedef struct {
+            float x, y;
+            float vx, vy;
+        } Entity;
+        
+        void update_physics(Entity* entity, float dt) {
+            entity->x += entity->vx * dt;
+            entity->y += entity->vy * dt;
+        }
+        
+        float distance(Entity* a, Entity* b) {
+            float dx = a->x - b->x;
+            float dy = a->y - b->y;
+            return sqrt(dx * dx + dy * dy);
+        }
+        EOF
+
     - name: Test React project analysis
       run: |
         python codebase_indexer.py ./test-projects/react-app --summary
@@ -191,6 +257,10 @@ jobs:
     - name: Test PHP project analysis
       run: |
         python codebase_indexer.py ./test-projects/php-app --summary
+
+    - name: Test C/C++ project analysis
+      run: |
+        python codebase_indexer.py ./test-projects/cpp-game --summary
 
     - name: Verify output quality
       run: |
@@ -200,3 +270,7 @@ jobs:
         # Check that PHP classes were detected  
         python codebase_indexer.py ./test-projects/php-app --summary
         grep -q "php_classes" codebase_index.json || exit 1
+        
+        # Check that C++ classes and C functions were detected
+        python codebase_indexer.py ./test-projects/cpp-game --summary
+        grep -q "cpp_classes\|structs" codebase_index.json || exit 1

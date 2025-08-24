@@ -1,17 +1,17 @@
-# Core dependencies
-# No hard dependencies - all database connectors are optional
+# Full installation with all optional dependencies
+# Use this if you want maximum functionality
 
-# Database connectors (install as needed)
-# Uncomment the ones you need:
+# Database connectors
+mysql-connector-python>=8.0.0
+psycopg2-binary>=2.9.0
 
-mysql-connector-python>=8.0.0    # For MySQL
-# psycopg2-binary>=2.9.0           # For PostgreSQL  
-
-# Enhanced parsing (recommended for better accuracy)
+# Enhanced parsing
 tree-sitter>=0.20.0
 tree-sitter-languages>=1.10.2
 
-# Alternative tree-sitter packages (if above doesn't work)
+# If tree-sitter-languages doesn't work, use individual packages:
 # tree-sitter-python>=0.20.0
 # tree-sitter-javascript>=0.20.0  
 # tree-sitter-php>=0.22.0
+# tree-sitter-c>=0.20.0
+# tree-sitter-cpp>=0.20.0
