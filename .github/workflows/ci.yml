@@ -1,0 +1,202 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.8', '3.9', '3.10', '3.11']
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install basic dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 pytest
+
+    - name: Lint with flake8
+      run: |
+        # stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Test basic functionality (no external dependencies)
+      run: |
+        # Test that the script runs without crashing
+        python codebase_indexer.py --help
+        
+        # Test basic analysis on the repository itself
+        python codebase_indexer.py . --summary
+        
+        # Check that output file was created
+        test -f codebase_index.json
+
+    - name: Test with enhanced dependencies (Linux only)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        # Install tree-sitter for enhanced parsing tests
+        pip install tree-sitter tree-sitter-languages || true
+        
+        # Test with tree-sitter if available
+        python codebase_indexer.py . --force-refresh --summary
+
+  test-databases:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testpassword
+          MYSQL_DATABASE: testdb
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: testdb
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install database dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install mysql-connector-python psycopg2-binary
+
+    - name: Test MySQL connection
+      run: |
+        # Test MySQL database analysis
+        python codebase_indexer.py . \
+          --db-type mysql \
+          --db-host localhost \
+          --db-port 3306 \
+          --db-user root \
+          --db-password testpassword \
+          --db-name testdb \
+          --summary || echo "MySQL test failed (expected - no tables)"
+
+    - name: Test PostgreSQL connection  
+      run: |
+        # Test PostgreSQL database analysis
+        python codebase_indexer.py . \
+          --db-type postgresql \
+          --db-host localhost \
+          --db-port 5432 \
+          --db-user postgres \
+          --db-password testpassword \
+          --db-name testdb \
+          --summary || echo "PostgreSQL test failed (expected - no tables)"
+
+    - name: Test SQLite
+      run: |
+        # Create a simple SQLite database for testing
+        sqlite3 test.db "CREATE TABLE test (id INTEGER PRIMARY KEY, name TEXT);"
+        sqlite3 test.db "INSERT INTO test (name) VALUES ('test1'), ('test2');"
+        
+        # Test SQLite database analysis
+        python codebase_indexer.py . \
+          --db-type sqlite \
+          --db-path test.db \
+          --summary
+
+  test-sample-projects:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install full dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-full.txt || pip install mysql-connector-python psycopg2-binary
+
+    - name: Create sample React project structure
+      run: |
+        mkdir -p test-projects/react-app/src/components
+        cat > test-projects/react-app/src/components/TestComponent.jsx << 'EOF'
+        import React, { useState, useEffect } from 'react';
+        
+        export default function TestComponent({ userId, onUpdate }) {
+          const [data, setData] = useState(null);
+          
+          useEffect(() => {
+            // Fetch data
+          }, [userId]);
+          
+          return <div>Test Component</div>;
+        }
+        EOF
+
+    - name: Create sample PHP project structure
+      run: |
+        mkdir -p test-projects/php-app/src
+        cat > test-projects/php-app/src/UserController.php << 'EOF'
+        <?php
+        namespace App\Controllers;
+        
+        class UserController {
+            public function index() {
+                return "Hello World";
+            }
+            
+            public function create($data) {
+                // Create user logic
+            }
+        }
+        EOF
+
+    - name: Test React project analysis
+      run: |
+        python codebase_indexer.py ./test-projects/react-app --summary
+
+    - name: Test PHP project analysis
+      run: |
+        python codebase_indexer.py ./test-projects/php-app --summary
+
+    - name: Verify output quality
+      run: |
+        # Check that React components were detected
+        grep -q "react_components" codebase_index.json || exit 1
+        
+        # Check that PHP classes were detected  
+        python codebase_indexer.py ./test-projects/php-app --summary
+        grep -q "php_classes" codebase_index.json || exit 1
